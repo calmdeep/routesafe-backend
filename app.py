@@ -1,11 +1,8 @@
-# app.py - Flask Backend with Image Verification
+# app.py - Flask Backend WITHOUT Image Verification
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import anthropic
-import base64
 import json
-from PIL import Image
-from io import BytesIO
 
 app = Flask(__name__)
 CORS(app)
@@ -14,87 +11,15 @@ client = anthropic.Anthropic()
 
 @app.route('/api/verify-image', methods=['POST'])
 def verify_image():
-    """Verify if uploaded image is a road/street image"""
-    try:
-        data = request.json
-        image_data = data.get('image')
-        
-        if not image_data:
-            return jsonify({'isValid': False, 'reason': 'No image provided'}), 400
-        
-        # Extract base64 image data
-        if ',' in image_data:
-            image_data = image_data.split(',')[1]
-        
-        # Determine image type
-        media_type = 'image/jpeg'
-        if data.get('image', '').startswith('data:image/png'):
-            media_type = 'image/png'
-        
-        # Call Claude API for verification
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=500,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": image_data
-                        }
-                    },
-                    {
-                        "type": "text",
-                        "text": """Analyze this image quickly and determine if it could be related to roads or outdoor surfaces.
-
-Return ONLY a JSON object (no markdown, no backticks):
-
-{
-  "isValid": true or false,
-  "reason": "brief explanation"
-}
-
-ACCEPT these images:
-- Any roads, highways, streets (clear or unclear)
-- Parking lots, driveways, sidewalks
-- ANY outdoor paved surface
-- Even blurry road images
-- Even partial road views
-- Ground/pavement from any angle
-
-REJECT only these:
-- Clear portraits/selfies of people
-- Indoor scenes with no outdoor elements
-- Animals close-up
-- Food items
-- Pure text documents
-
-Be VERY LENIENT - when in doubt, accept the image."""
-                    }
-                ]
-            }]
-        )
-        
-        response_text = message.content[0].text.strip()
-        response_text = response_text.replace('```json', '').replace('```', '').strip()
-        
-        result = json.loads(response_text)
-        
-        return jsonify(result)
-        
-    except Exception as e:
-        print(f"Verification Error: {str(e)}")
-        return jsonify({
-            'isValid': False,
-            'reason': 'Failed to verify image. Please try again.'
-        }), 500
+    """Always returns valid - no verification"""
+    return jsonify({
+        'isValid': True,
+        'reason': 'Image accepted'
+    })
 
 @app.route('/api/detect', methods=['POST'])
 def detect_potholes():
-    """Detect potholes in verified road images"""
+    """Detect potholes in road images"""
     try:
         data = request.json
         image_data = data.get('image')
@@ -129,23 +54,23 @@ def detect_potholes():
                     },
                     {
                         "type": "text",
-                        "text": """You are an expert road damage detection AI. Analyze this road image with MAXIMUM ACCURACY for potholes, cracks, and structural damage.
+                        "text": """You are an expert road damage detection AI. Analyze this image for potholes, cracks, and road damage.
 
-Return ONLY a valid JSON object (no markdown, no backticks) with this structure:
+Return ONLY a valid JSON object (no markdown, no backticks):
 
 {
   "hasPotholes": true or false,
-  "totalPotholes": exact number,
+  "totalPotholes": number,
   "detections": [
     {
       "id": number,
       "severity": "HIGH" or "MEDIUM" or "LOW",
-      "confidence": decimal 0-1,
-      "location": "precise location description",
+      "confidence": number between 0 and 1,
+      "location": "description of location in image",
       "estimatedSize": "small" or "medium" or "large",
       "damageType": "pothole" or "crack" or "surface damage",
       "estimatedDepth": "shallow" or "moderate" or "deep",
-      "description": "technical description"
+      "description": "brief technical description"
     }
   ],
   "roadType": "National Highway" or "State Highway" or "District Road" or "Urban Road" or "Rural Road",
@@ -153,14 +78,14 @@ Return ONLY a valid JSON object (no markdown, no backticks) with this structure:
   "overallRiskLevel": "Critical" or "High" or "Moderate" or "Low"
 }
 
-CRITICAL RULES:
-- BE EXTREMELY ACCURATE - Only report actual visible damage
-- Look for: potholes, cracks, worn surfaces, edge breaks, depressions
-- Severity HIGH = immediate safety risk (large/deep)
-- Severity MEDIUM = needs attention soon
-- Severity LOW = minor wear
-- Provide precise location details
-- Be conservative with confidence scores"""
+IMPORTANT:
+- If you see a road/pavement with damage, set hasPotholes to true
+- If you see a clear road with NO damage, set hasPotholes to false and totalPotholes to 0
+- Be accurate but not too strict
+- Look for visible potholes, cracks, worn surfaces
+- HIGH severity = dangerous/large damage
+- MEDIUM severity = needs attention
+- LOW severity = minor wear"""
                     }
                 ]
             }]
@@ -204,8 +129,10 @@ def health_check():
     return jsonify({'status': 'healthy', 'message': 'RouteSafe Backend Running'}), 200
 
 if __name__ == '__main__':
+    import os
+    port = int(os.environ.get('PORT', 5000))
     print("🚀 RouteSafe Backend Starting...")
-    print("📍 Running on: http://localhost:5000")
-    print("✅ Image verification enabled")
+    print("📍 Running on port:", port)
+    print("✅ Image verification DISABLED - All images accepted")
     print("✅ Ready to receive requests")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=port)
