@@ -48,7 +48,7 @@ def verify_image():
                     },
                     {
                         "type": "text",
-                        "text": """Analyze this image and determine if it shows a road, street, or pavement that could have potholes or road damage.
+                        "text": """Analyze this image quickly and determine if it could be related to roads or outdoor surfaces.
 
 Return ONLY a JSON object (no markdown, no backticks):
 
@@ -57,20 +57,22 @@ Return ONLY a JSON object (no markdown, no backticks):
   "reason": "brief explanation"
 }
 
-Valid images:
-- Roads, highways, streets
-- Pavements, asphalt surfaces
-- Parking lots, driveways
-- Any paved surface that could have potholes
+ACCEPT these images:
+- Any roads, highways, streets (clear or unclear)
+- Parking lots, driveways, sidewalks
+- ANY outdoor paved surface
+- Even blurry road images
+- Even partial road views
+- Ground/pavement from any angle
 
-Invalid images:
-- People, faces, portraits
-- Buildings, landscapes without roads
-- Indoor scenes
-- Animals, food, objects
-- Anything not related to roads/pavements
+REJECT only these:
+- Clear portraits/selfies of people
+- Indoor scenes with no outdoor elements
+- Animals close-up
+- Food items
+- Pure text documents
 
-Be strict - only accept clear road/pavement images."""
+Be VERY LENIENT - when in doubt, accept the image."""
                     }
                 ]
             }]
