@@ -1,17 +1,20 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import google.genai as genai
+import requests
 import json
 import os
+import base64
 
 app = Flask(__name__)
 CORS(app)
 
-# Load API Key
-genai_key = os.environ.get("GEMINI_API_KEY")
-client = genai.Client(api_key=genai_key)
+# === Roboflow Credentials ===
+ROBOFLOW_API_KEY = os.environ.get("rf_YGfI1uPHeBZ2NoazegJoAgCnbyJ3")  # or paste directly
+ROBOFLOW_MODEL = "pothole-detection"   # example
+ROBOFLOW_VERSION = "1"                 # example
 
-@app.route('/', methods=['POST'])
+
+@app.route("/", methods=["POST"])
 def handle_request():
     data = request.json
     image = data.get("image")
@@ -20,61 +23,54 @@ def handle_request():
     if not image:
         return jsonify({"success": False, "error": "No image"}), 400
 
-    # Verification request (only image)
+    # Verification request (only image check)
     if location is None:
         return jsonify({"isValid": True, "reason": "Image accepted"})
 
-    # Extract base64
+    # Extract base64 content
     if "," in image:
         base64_img = image.split(",")[1]
     else:
         base64_img = image
 
-    # Send to Gemini Flash Vision
-    prompt = """
-You are a road damage detection AI. Analyze image and return *ONLY JSON*:
-
-{
-  "hasPotholes": true/false,
-  "totalPotholes": number,
-  "detections": [
-    {
-      "id": number,
-      "severity": "HIGH" | "MEDIUM" | "LOW",
-      "confidence": float,
-      "damageType": "pothole" | "crack" | "surface damage",
-      "estimatedSize": "small" | "medium" | "large",
-      "description": "text"
-    }
-  ],
-  "roadType": "...",
-  "roadCondition": "...",
-  "overallRiskLevel": "..."
-}
-"""
-
-    response = client.models.generate(
-        model="gemini-2.0-flash-vision",
-        prompt=prompt,
-        image=[{
-            "mime_type": "image/jpeg",
-            "data": base64_img
-        }]
-    )
-
-    text = response.text.strip()
-    text = text.replace("```json", "").replace("```", "").strip()
+    # === Send image to Roboflow ===
+    url = f"https://detect.roboflow.com/{ROBOFLOW_MODEL}/{ROBOFLOW_VERSION}?api_key={ROBOFLOW_API_KEY}"
 
     try:
-        result = json.loads(text)
-    except:
-        return jsonify({"success": False, "error": "Invalid JSON", "raw": text}), 500
+        rf_response = requests.post(
+            url,
+            data=base64.b64decode(base64_img),
+            headers={"Content-Type": "application/octet-stream"}
+        ).json()
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
-    result["location"] = location
-    result["success"] = True
-    return jsonify(result)
+    # === Convert Roboflow result → Your frontend JSON format ===
+    detections = []
+    for idx, pred in enumerate(rf_response.get("predictions", [])):
+        detections.append({
+            "id": idx + 1,
+            "severity": "HIGH" if pred["confidence"] > 0.85 else "MEDIUM",
+            "confidence": round(pred["confidence"], 3),
+            "damageType": "pothole",
+            "estimatedSize": "large" if pred["width"] > 100 else "medium",
+            "description": f"Pothole detected at ({pred['x']}, {pred['y']})"
+        })
+
+    output = {
+        "success": True,
+        "location": location,
+        "hasPotholes": len(detections) > 0,
+        "totalPotholes": len(detections),
+        "detections": detections,
+        "roadType": "Unknown",
+        "roadCondition": "Poor" if len(detections) > 0 else "Good",
+        "overallRiskLevel": "HIGH" if len(detections) >= 3 else "LOW"
+    }
+
+    return jsonify(output)
 
 
-@app.route('/api/health')
+@app.route("/api/health")
 def health():
     return jsonify({"status": "ok"})
