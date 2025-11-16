@@ -6,12 +6,14 @@ import os
 import base64
 
 app = Flask(__name__)
-CORS(app)
 
-# === Roboflow Credentials ===
-ROBOFLOW_API_KEY = os.environ.get("rf_YGfI1uPHeBZ2NoazegJoAgCnbyJ3")  # or paste directly
-ROBOFLOW_MODEL = "pothole-detection/2"   # example
-ROBOFLOW_VERSION = "1"                 # example
+# CORS FIX FOR VERCEL FRONTEND
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+# === Roboflow Model Credentials ===
+ROBOFLOW_API_KEY = os.environ.get("rf_YGfI1uPHeBZ2NoazegJoAgCnbyJ3")
+ROBOFLOW_MODEL = "pothole-detection"   # change to your model name
+ROBOFLOW_VERSION = "1"                 # change to your version
 
 
 @app.route("/", methods=["POST"])
@@ -23,17 +25,17 @@ def handle_request():
     if not image:
         return jsonify({"success": False, "error": "No image"}), 400
 
-    # Verification request (only image check)
+    # If only image (verification)
     if location is None:
         return jsonify({"isValid": True, "reason": "Image accepted"})
 
-    # Extract base64 content
+    # Extract raw base64
     if "," in image:
         base64_img = image.split(",")[1]
     else:
         base64_img = image
 
-    # === Send image to Roboflow ===
+    # === ROB0FLOW API CALL ===
     url = f"https://detect.roboflow.com/{ROBOFLOW_MODEL}/{ROBOFLOW_VERSION}?api_key={ROBOFLOW_API_KEY}"
 
     try:
@@ -42,10 +44,11 @@ def handle_request():
             data=base64.b64decode(base64_img),
             headers={"Content-Type": "application/octet-stream"}
         ).json()
+
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-    # === Convert Roboflow result → Your frontend JSON format ===
+    # Convert Roboflow predictions → your JSON format
     detections = []
     for idx, pred in enumerate(rf_response.get("predictions", [])):
         detections.append({
@@ -64,7 +67,7 @@ def handle_request():
         "totalPotholes": len(detections),
         "detections": detections,
         "roadType": "Unknown",
-        "roadCondition": "Poor" if len(detections) > 0 else "Good",
+        "roadCondition": "Poor" if len(detections) else "Good",
         "overallRiskLevel": "HIGH" if len(detections) >= 3 else "LOW"
     }
 
@@ -74,3 +77,9 @@ def handle_request():
 @app.route("/api/health")
 def health():
     return jsonify({"status": "ok"})
+
+
+# REQUIRED FOR RENDER! (Fixes 100% of “server not connecting” issues)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
