@@ -10,7 +10,7 @@ CORS(app)
 
 # === Roboflow Credentials ===
 ROBOFLOW_API_KEY = os.environ.get("rf_YGfI1uPHeBZ2NoazegJoAgCnbyJ3")  # or paste directly
-ROBOFLOW_MODEL = "pothole-detection"   # example
+ROBOFLOW_MODEL = "pothole-detection/2"   # example
 ROBOFLOW_VERSION = "1"                 # example
 
 
